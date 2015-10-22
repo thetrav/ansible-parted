@@ -13,7 +13,7 @@ options:
     device:
         required: true
         description:
-            - Device to select (eg: /deb/sdb)
+            - Device to select (eg: /dev/sdb)
     label:
         required: false
         default: "gpt"
@@ -112,9 +112,9 @@ class PartitionTable(object):
         self.device = device
         self.unit = unit
 
-    def refresh(self, module):
+    def refresh(self, run_command):
         cmd = "parted {device} unit {unit} print".format(device=self.device, unit = self.unit)
-        rc, stdout, stderr = module.run_command(cmd, use_unsafe_shell=False, data=None)
+        rc, stdout, stderr = run_command(cmd, use_unsafe_shell=False, data=None)
         if rc != 0:
             return ""
         lines = stdout.split("\n")
@@ -137,22 +137,22 @@ class PartitionTable(object):
         self.table = [Partition(partition, self.size) for partition in read_fixed_width_table(table)]
 
 
-    def set_label(self, module, label):
-        self.refresh(module)
+    def set_label(self, run_command, label):
+        self.refresh(run_command)
 
         if self.label == label:
             return False
         else:
             cmd = "parted -s -a optimal {device} -- mklabel {label}".format(device = self.device, label=label)
-            rc, stdout, stderr = module.run_command(cmd)
+            rc, stdout, stderr = run_command(cmd)
             if rc != 0:
                 return False
-            self.refresh(module)
+            self.refresh(run_command)
             return True
         
 
-    def set_partition(self, module, unit, part_type, fs_type, start, end):
-        self.refresh(module)
+    def set_partition(self, run_command, unit, part_type, fs_type, start, end):
+        self.refresh(run_command)
 
         if len(filter(lambda partition: partition.same(start, end), self.table)) > 0:
             return False
@@ -160,9 +160,11 @@ class PartitionTable(object):
         #remove overlapping
         for partition in self.table:
             if partition.overlaps(start, end):
-                cmd = "parted -s -a optimal {device} -- unit {unit} rm {number}".format(device = self.device, unit = self.unit, number = partition.number)
-                print "\n\nremoving overlapping partition: {} \n with command {}".format(partition, cmd)
-                rc, stdout, stderr = module.run_command(cmd)
+                cmd = "parted -s -a optimal {device} -- unit {unit} rm {number}".format(
+                    device = self.device, 
+                    unit = self.unit, 
+                    number = partition.number)
+                rc, stdout, stderr = run_command(cmd)
                 if rc != 0:
                     raise ValueError("{} {} {} {}".format(rc, stdout, stderr, cmd))
         
@@ -174,11 +176,10 @@ class PartitionTable(object):
             fs_type = fs_type,
             start = start,
             end = end)
-        print "creating partition with command: {}".format(cmd)
-        rc, stdout, stderr = module.run_command(cmd)
+        rc, stdout, stderr = run_command(cmd)
         if rc != 0:
             raise ValueError("{} {} {} {}".format(rc, stdout, stderr, cmd))
-        self.refresh(module)
+        self.refresh(run_command)
         return True
 
 def main():
@@ -201,9 +202,9 @@ def main():
     result = {}
 
     partition_table = PartitionTable(*params('device', 'unit'))
-    changed_label = partition_table.set_label(module, param("label"))
+    changed_label = partition_table.set_label(module.run_command, param("label"))
 
-    changed_table = partition_table.set_partition(module, *params('unit', 'part_type', 'fs_type', 'start', 'end'))
+    changed_table = partition_table.set_partition(module.run_command, *params('unit', 'part_type', 'fs_type', 'start', 'end'))
     
     result['changed'] = changed_label or changed_table
     result['partition_table'] = [p.__dict__ for p in partition_table.table]
