@@ -1,0 +1,15 @@
+---
+- hosts: target
+  user: thetrav
+  sudo: yes
+  tasks: 
+  - name: create partitions
+    partition:
+      device: /dev/sdb
+      unit: GB
+      start: "{{ item.start }}"
+      end: "{{ item.end }}"
+    with_items:
+    - { start: 2, end: 4 }
+    - { start: 4, end: -1 }
+    
