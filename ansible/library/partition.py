@@ -59,14 +59,15 @@ EXAMPLES = '''
 '''
 
 def read_fixed_width_table(table):
-    titles = table[0].split()
-
+    titles = [title.strip() for title in table[0].split()]
+    
     column_starts = [table[0].index(title) for title in titles]
     column_ends = [num - 1 for num in column_starts[1:]] + [len(table[0])]
     columns = zip(column_starts, column_ends)
-
-    values = [[line[column[0]:column[1]].strip() for column in columns] for line in table[1:]]
-    return [dict(zip([title.strip() for title in titles], line)) for line in values]
+    def record(line):
+        values = [line[column[0]:column[1]].strip() for column in columns]
+        return dict(zip(titles, values))
+    return [ record(line) for line in table[1:] ]
 
 class Partition(object):
     def __init__(self, table, max_size):
